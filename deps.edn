@@ -1,0 +1,5 @@
+{:deps {
+        ; vincit/venia {:mvn/version "0.2.5"}
+        org.martinklepsch/clj-http-lite {:mvn/version "0.4.3"}
+        ; floatingpointio/graphql-builder {:mvn/version "0.1.12"}
+        org.clojure/data.json {:mvn/version "1.0.0"}}}

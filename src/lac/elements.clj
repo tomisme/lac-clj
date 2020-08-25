@@ -52,10 +52,10 @@
 
 
 (defn main-el
-  []
-  [:main])
+  [& children]
+  (into [:main] children))
 
-  
+
 (defn footer-el
   []
   [:footer

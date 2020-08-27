@@ -3,18 +3,18 @@
    [lac.elements :as el]
    [clojure.edn :as edn]
    [clojure.data.json :as json]
-   [hickory.core :as html]
+   [hickory.core :as hickory]
    [hiccup.core :as hiccup]
    [clj-http.lite.client :as http]
    [me.raynes.fs :as fs]
    #_[tick.alpha.api :as t]))
 
-
 (def config
   (edn/read-string (slurp "config.edn")))
 
 
-(def all-posts-query "{posts{edges{node{id,modified,modifiedGmt,title,status,slug,uri,date}}}}")
+(def all-posts-query
+  "{posts{edges{node{id,modified,modifiedGmt,title,status,slug,uri,date}}}}")
 
 
 (defn post-content-by-id-query
@@ -30,16 +30,17 @@
               :body (json/write-str {:query q})}))
 
 
-(def post-responses
-  (-> (query! all-posts-query)
-      :body
-      (json/read-str :key-fn keyword)
-      :data
-      :posts
-      :edges))
+(defn wp-post-content-path
+  [id]
+  (str "data/wp_post_content/" id ".html"))
 
 
-(defn process-post-response
+(defn wp-post-meta-path
+  [id]
+  (str "data/wp_post_meta/" id ".edn"))
+
+
+(defn post-response->meta
   [{:keys [node]}]
   {:post/id (:id node)
    :published-date (:date node)
@@ -49,14 +50,17 @@
    :title (:title node)})
 
 
-(defn wp-post-content-path
-  [id]
-  (str "data/wp_post_content/" id ".html"))
-
-
-(defn wp-post-meta-path
-  [id]
-  (str "data/wp_post_meta/" id ".edn"))
+(defn dl-wp-post-metas!
+  []
+  (doseq [meta (map post-response->meta
+                    (-> (query! all-posts-query)
+                        :body
+                        (json/read-str :key-fn keyword)
+                        :data
+                        :posts
+                        :edges))]
+    (spit (wp-post-meta-path (:post/id meta))
+          meta)))
 
 
 (defn dl-wp-post-content!
@@ -72,17 +76,23 @@
           content)))
 
 
-(defn wp-post-content->hiccup
-  [id]
-  (let [seq (-> (wp-post-content-path id)
-                slurp
-                (html/parse-fragment))]
-    (map html/as-hiccup seq)))
-
-
-(defn get-saved-post-ids
+(defn get-saved-wp-post-meta-ids
   []
   (map fs/name (fs/list-dir "data/wp_post_meta")))
+
+
+(defn get-saved-wp-post-metas
+  []
+  (for [f (fs/list-dir "data/wp_post_meta")]
+    (edn/read-string (slurp f))))
+
+
+(defn wp-post-content->hiccup
+  [id]
+  (map hickory/as-hiccup
+       (-> (wp-post-content-path id)
+           slurp
+           (hickory/parse-fragment))))
 
 
 (defn build-post-page-hiccup
@@ -99,16 +109,22 @@
 #_(dl-wp-post-content! "cG9zdDo0MA==")
 #_(into [:div] (wp-post-content->hiccup "cG9zdDo0MA=="))
 #_(build-post-page-hiccup "cG9zdDo0MA==")
-
 #_(spit "a.html"
         (-> (build-post-page-hiccup "cG9zdDo0MA==")
             hiccup/html))
+#_(get-saved-wp-post-meta-ids)
 
-#_(get-saved-post-ids)
+;; STEP 1: download all wordpress post metadata
+#_(dl-wp-post-metas!)
 
-#_(doseq [post (map process-post-response post-responses)]
-    (spit (wp-post-meta-path (:post/id post))
-          post))
+;; STEP 2: download all wordpress post content
+#_(doseq [id (get-saved-wp-post-meta-ids)]
+    (dl-wp-post-content! id))
 
-#_(doseq [id (get-saved-post-ids)]
-    (spit (str "public/post/")))
+;; STEP 3: fill up public/ with posts!
+#_(doseq [{:keys [uri post/id]} (get-saved-wp-post-metas)]
+    (let [path (str "public" uri)]
+      (fs/mkdirs path)
+      (spit (str path "index.html")
+            (-> (build-post-page-hiccup id)
+                hiccup/html))))

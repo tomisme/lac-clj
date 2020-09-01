@@ -10,7 +10,8 @@
                   :display "flex"
                   :justify-content "space-between"
                   :align-items "center"}}
-    [:a {:style {:color "white"
+    [:a {:href "/"
+         :style {:color "white"
                  :background-color "transparent"
                  :text-decoration "none"}}
      [:img {:style {:height "5rem"

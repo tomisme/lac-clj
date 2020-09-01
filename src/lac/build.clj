@@ -18,6 +18,10 @@
   "{posts{edges{node{id,modified,modifiedGmt,title,status,slug,uri,date,categories{nodes{name}}}}}}")
 
 
+(def all-pages-query
+  "{pages{nodes{id,uri}}}")
+
+
 (def main-menu-query
   "{menuItems(where:{location:MENU_1}){nodes{path,order,label}}}")
 
@@ -29,6 +33,11 @@
 (defn post-content-by-id-query
   [id]
   (str "{post(id:\"" id "\"){content}}"))
+
+
+(defn page-content-by-id-query
+  [id]
+  (str "{page(id:\"" id "\"){content}}"))
 
 
 (defn posts-by-category-query
@@ -76,6 +85,24 @@
   (str post-meta-path "/" id ".edn"))
 
 
+(def page-content-path
+  (str data-path "/wp-page-content"))
+
+
+(defn page-content-path-by-id
+  [id]
+  (str page-content-path "/" id ".html"))
+
+
+(def page-meta-path
+  (str data-path "/wp-page-meta"))
+
+
+(defn page-meta-path-by-id
+  [id]
+  (str page-meta-path "/" id ".edn"))
+
+
 (defn post-res->post-meta
   [{:keys [node]}]
   {:post/id (:id node)
@@ -98,6 +125,23 @@
           meta)))
 
 
+(defn page-res->page-meta
+  [{:keys [uri id]}]
+  {:page/id id
+   :uri uri})
+
+
+(defn dl-page-metas!
+  []
+  (fs/mkdirs page-meta-path)
+  (doseq [meta (map page-res->page-meta
+                    (-> (query! all-pages-query)
+                        :pages
+                        :nodes))]
+    (spit (page-meta-path-by-id (:page/id meta))
+          meta)))
+
+
 (defn dl-post-content!
   [id]
   (fs/mkdirs post-content-path)
@@ -105,6 +149,16 @@
         (-> (post-content-by-id-query id)
             query!
             :post
+            :content)))
+
+
+(defn dl-page-content!
+  [id]
+  (fs/mkdirs page-content-path)
+  (spit (page-content-path-by-id id)
+        (-> (page-content-by-id-query id)
+            query!
+            :page
             :content)))
 
 
@@ -148,6 +202,17 @@
     (edn/read-string (slurp f))))
 
 
+(defn get-saved-page-meta-ids
+  []
+  (map fs/name (fs/list-dir page-meta-path)))
+
+
+(defn get-saved-page-metas
+  []
+  (for [f (fs/list-dir page-meta-path)]
+    (edn/read-string (slurp f))))
+
+
 (defn get-saved-main-menu
   []
   (edn/read-string (slurp main-menu-path)))
@@ -180,6 +245,14 @@
            (hickory/parse-fragment))))
 
 
+(defn build-page-content-hiccup
+  [id]
+  (map hickory/as-hiccup
+       (-> (page-content-path-by-id id)
+           slurp
+           (hickory/parse-fragment))))
+
+
 (defn build-page-hiccup
   [{:keys [main]}]
   [:body
@@ -192,6 +265,11 @@
 (defn build-post-page-hiccup
   [id]
   (build-page-hiccup {:main (build-post-content-hiccup id)}))
+
+
+(defn build-page-page-hiccup
+  [id]
+  (build-page-hiccup {:main (build-page-content-hiccup id)}))
 
 
 (defn category-child-el
@@ -242,15 +320,24 @@
 #_(tap> (for [category (get-saved-categories)]
           (build-category-page-hiccup category)))
 
-
 ;; download wordpress data
 #_(dl-post-metas!)
+#_(dl-page-metas!)
 #_(dl-main-menu!)
 #_(dl-categories!)
 
 ;; download wordpress post content
 #_(doseq [id (get-saved-post-meta-ids)]
     (dl-post-content! id))
+
+;; download wordpress page content
+#_(doseq [id (get-saved-page-meta-ids)]
+    (dl-page-content! id))
+
+;; build index page
+#_(spit "public/index.html"
+        (-> (build-page-hiccup {})
+            hiccup/html))
 
 ;; build category pages
 #_(doseq [{:keys [uri] :as category} (get-saved-categories)]
@@ -266,4 +353,12 @@
       (fs/mkdirs path)
       (spit (str path "index.html")
             (-> (build-post-page-hiccup id)
+                hiccup/html))))
+
+;; build page pages
+#_(doseq [{:keys [uri page/id]} (get-saved-page-metas)]
+    (let [path (str "public" uri)]
+      (fs/mkdirs path)
+      (spit (str path "index.html")
+            (-> (build-page-page-hiccup id)
                 hiccup/html))))

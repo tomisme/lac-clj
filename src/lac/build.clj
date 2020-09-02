@@ -8,18 +8,27 @@
    [hiccup.core :as hiccup]
    [clj-http.lite.client :as http]
    [me.raynes.fs :as fs]
-   #_[tick.alpha.api :as t]))
+   [tick.alpha.api :as t]
+   [tick.format]
+   [time-literals.read-write]))
+
+(defn read-edn
+  [filename]
+  (edn/read-string
+   {:readers time-literals.read-write/tags}
+   (slurp filename)))
+
 
 (def config
-  (edn/read-string (slurp "config.edn")))
+  (read-edn "config.edn"))
 
 
 (def all-posts-query
-  "{posts{edges{node{id,modified,modifiedGmt,title,status,slug,uri,date,categories{nodes{name}}}}}}")
+  "{posts{edges{node{id,modified,modifiedGmt,title,status,slug,uri,date,author{node{name}},categories{nodes{name,uri}}}}}}")
 
 
 (def all-pages-query
-  "{pages{nodes{id,uri}}}")
+  "{pages{nodes{id,uri,title}}}")
 
 
 (def main-menu-query
@@ -106,9 +115,10 @@
 (defn post-res->post-meta
   [{:keys [node]}]
   {:post/id (:id node)
+   :author (-> node :author :node)
    :categories (-> node :categories :nodes)
-   :published-date (:date node)
-   :last-modified-date-gmt (:modifiedGmt node)
+   :published-date (t/parse (:date node))
+   :last-modified-date-gmt (t/parse (:modifiedGmt node))
    :uri (:uri node)
    :slug (:slug node)
    :title (:title node)})
@@ -126,9 +136,10 @@
 
 
 (defn page-res->page-meta
-  [{:keys [uri id]}]
+  [{:keys [uri id title]}]
   {:page/id id
-   :uri uri})
+   :uri uri
+   :title title})
 
 
 (defn dl-page-metas!
@@ -198,8 +209,7 @@
 
 (defn get-saved-post-metas
   []
-  (for [f (fs/list-dir post-meta-path)]
-    (edn/read-string (slurp f))))
+  (map read-edn (fs/list-dir post-meta-path)))
 
 
 (defn get-saved-page-meta-ids
@@ -209,18 +219,27 @@
 
 (defn get-saved-page-metas
   []
-  (for [f (fs/list-dir page-meta-path)]
-    (edn/read-string (slurp f))))
+  (map read-edn (fs/list-dir page-meta-path)))
+
+
+(defn get-saved-post-meta-by-id
+  [id]
+  (read-edn (post-meta-path-by-id id)))
+
+
+(defn get-saved-page-meta-by-id
+  [id]
+  (read-edn (page-meta-path-by-id id)))
 
 
 (defn get-saved-main-menu
   []
-  (edn/read-string (slurp main-menu-path)))
+  (read-edn main-menu-path))
 
 
 (defn get-saved-categories
   []
-  (edn/read-string (slurp categories-path)))
+  (read-edn categories-path))
 
 
 (defn get-saved-category-details-by-name
@@ -230,7 +249,7 @@
         (get-saved-categories)))
 
 
-(defn get-saved-posts-by-category-name
+(defn get-saved-post-metas-by-category-name
   [name]
   (filter (fn [{:keys [categories]}]
             (some #{name} (map :name categories)))
@@ -264,44 +283,36 @@
 
 (defn build-post-page-hiccup
   [id]
-  (build-page-hiccup {:main (build-post-content-hiccup id)}))
+  (build-page-hiccup
+   {:main (el/basic-main-el
+            (get-saved-post-meta-by-id id)
+            (build-post-content-hiccup id))}))
 
 
 (defn build-page-page-hiccup
   [id]
-  (build-page-hiccup {:main (build-page-content-hiccup id)}))
+  (build-page-hiccup
+   {:main (el/basic-main-el
+           (get-saved-page-meta-by-id id)
+           (build-page-content-hiccup id))}))
 
 
-(defn category-child-el
-  [{:keys [name]}]
-  (let [{:keys [description]} (get-saved-category-details-by-name name)]
-    [:div
-     [:h2 name]
-     [:p description]]))
-
-
-(defn post-preview-el
-  [{:keys [title uri]}]
-  [:li
-   [:a {:href uri}
-    title]])
-
-
-(defn category-page-main-el
-  [{:keys [description name children]}]
-  [:div
-   [:h1 name]
-   [:p description]
-   (if children
-     (into [:div]
-           (map category-child-el children))
-     (into [:ul]
-           (map post-preview-el (get-saved-posts-by-category-name name))))])
+(defn build-index-page-hiccup
+  []
+  (build-page-hiccup
+   {:main (el/index-page-main-el
+           (->> (get-saved-post-metas)
+                (sort-by :published-date t/>)))}))
 
 
 (defn build-category-page-hiccup
-  [category]
-  (build-page-hiccup {:main (category-page-main-el category)}))
+  [{:keys [name children] :as category}]
+  (build-page-hiccup
+   {:main (el/category-page-main-el
+           category
+           (get-saved-post-metas-by-category-name name)
+           (map get-saved-category-details-by-name
+                (map :name children)))}))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -319,6 +330,13 @@
 #_(tap> (get-saved-post-meta-ids))
 #_(tap> (for [category (get-saved-categories)]
           (build-category-page-hiccup category)))
+#_(tap> (-> (build-category-page-hiccup {:name "Fiction"})))
+#_(->> (get-saved-post-metas)
+      first
+      :published-date
+      (t/format "MMM d, yyy"))
+#_()
+
 
 ;; download wordpress data
 #_(dl-post-metas!)
@@ -336,7 +354,7 @@
 
 ;; build index page
 #_(spit "public/index.html"
-        (-> (build-page-hiccup {})
+        (-> (build-index-page-hiccup)
             hiccup/html))
 
 ;; build category pages

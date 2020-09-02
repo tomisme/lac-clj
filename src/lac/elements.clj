@@ -2,34 +2,22 @@
   (:require
    [tick.alpha.api :as t]))
 
-#_{:style {:margin 0
-           :max-width 960
-           :padding "1rem 2rem"
-           :display "flex"
-           :justify-content "space-between"
-           :align-items "center"}}
-#_#_:style {:color "white"
-            :background-color "transparent"
-            :text-decoration "none"}
-#_#_:style {:height "5rem"
-            :max-width "100%"
-            :margin-left 0
-            :margin-right 0
-            :margin-top 0
-            :border-style "none"}
 
 (defn header-el
   [{:keys [menubar-items header-img-url]}]
   [:header
-   [:div
-    [:a {:href "/"}
+   [:div.banner-pic
+    [:a#page-top {:href "/"}
      [:img {:src header-img-url}]]]
-   [:div
+   [:div.main-menu
     (into [:ul]
           (for [{:keys [path label]} menubar-items]
             [:li
              [:a {:href path}
-              label]]))]])
+              label]]))
+    [:a.support-link {:href "/support"}
+     "❤"]]])
+
 
 
 (defn main-el
@@ -40,6 +28,9 @@
 (defn footer-el
   []
   [:footer
+   [:p
+    [:a {:href "#page-top"}
+     "Jump back to top"]]
    [:p
     "Thanks for visiting 😃"]
    [:p
@@ -62,7 +53,7 @@
 (defn posted-by-el
   [{:keys [author categories published-date]}]
   (let [category (first categories)]
-    [:div
+    [:div.posted-by
      "Posted in "
      [:a {:href (:uri category)}
       (:name category)]
@@ -77,7 +68,7 @@
   [posts]
   (if (empty? posts)
     [:div "Nothing here yet!"]
-    (into [:ul]
+    (into [:ul.post-list]
           (for [{:keys [title excerpt uri] :as post} posts]
             [:li
              [:a {:href uri}
@@ -95,9 +86,10 @@
 
 (defn category-child-el
   [{:keys [name description uri]}]
-  [:div
+  [:div.category-block
    [:a {:href uri}
     [:h2 name]]
+   [:div.byline "By Elisa"]
    [:p description]])
 
 
@@ -109,15 +101,15 @@
 
 
 (defn category-page-main-el
-  [{:keys [description name children]} posts child-categories]
-  [:div
-   [:h1 (condp = name
-          "Fiction" "Fiction Categories"
-          "Blog"    "Blog Posts"
-          "Recipes" "Latest Recipes"
-          name)]
-   [:p description]
-   (if children
-     (into [:div]
-           (map category-child-el child-categories))
-     (post-list-el posts))])
+  [{:keys [category posts children]}]
+  (let [{:keys [description name]} category]
+    [:div
+     [:h1 (condp = name
+            "Blog"    "Blog Posts"
+            "Recipes" "Latest Recipes"
+            name)]
+     [:p description]
+     (if (seq children)
+       (into [:div]
+             (map category-child-el children))
+       (post-list-el posts))]))

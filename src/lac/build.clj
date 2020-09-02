@@ -1,15 +1,16 @@
 (ns lac.build
   (:require
-   [portal.api :as p]
    [lac.elements :as el]
+   [lac.styles :as styles]
+   [portal.api :as p]
    [clojure.edn :as edn]
    [clojure.data.json :as json]
    [hickory.core :as hickory]
    [hiccup.core :as hiccup]
+   [hiccup.page :as hiccup-page]
    [clj-http.lite.client :as http]
    [me.raynes.fs :as fs]
    [tick.alpha.api :as t]
-   [tick.format]
    [time-literals.read-write]))
 
 (defn read-edn
@@ -66,6 +67,15 @@
 
 
 (def data-path "data")
+
+
+(def public-path "public")
+
+
+(def assets-path "assets")
+
+
+(def styles-filename "styles.css")
 
 
 (def main-menu-path
@@ -274,11 +284,16 @@
 
 (defn build-page-hiccup
   [{:keys [main]}]
-  [:body
-   (el/header-el {:menubar-items (get-saved-main-menu)
-                  :header-img-url "https://lightsandclockwork.xyz/static/header-6de1aeeca65f723a4779953f735d7b4d.svg"})
-   (el/main-el main)
-   (el/footer-el)])
+  (hiccup-page/html5 {:lang "en"}
+    [:head
+     (hiccup-page/include-css (str "/" styles-filename))
+     (hiccup-page/include-css "/recipe-public-modern.css")]
+    [:body
+     [:div.wrapper
+      (el/header-el {:menubar-items (get-saved-main-menu)
+                     :header-img-url "https://lightsandclockwork.xyz/static/header-6de1aeeca65f723a4779953f735d7b4d.svg"})
+      (el/main-el main)
+      (el/footer-el)]]))
 
 
 (defn build-post-page-hiccup
@@ -307,13 +322,13 @@
 
 (defn build-category-page-hiccup
   [{:keys [name children] :as category}]
-  (build-page-hiccup
-   {:main (el/category-page-main-el
-           category
-           (get-saved-post-metas-by-category-name name)
-           (map get-saved-category-details-by-name
-                (map :name children)))}))
-
+  (let [posts (get-saved-post-metas-by-category-name name)]
+    (build-page-hiccup
+     {:main (el/category-page-main-el
+             {:category category
+              :posts posts
+              :children (map get-saved-category-details-by-name
+                             (map :name children))})})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -321,8 +336,8 @@
 #_(p/open)
 #_(p/tap)
 
-#_(post-content-path-by-id "cG9zdDo0MA==")
-#_(dl-post-content! "cG9zdDo0MA==")
+#_(tap> (post-content-path-by-id "cG9zdDo0MA=="))
+#_(tap> (dl-post-content! "cG9zdDo0MA=="))
 #_(tap> (build-post-content-hiccup "cG9zdDo0MA=="))
 #_(tap> (build-post-page-hiccup "cG9zdDo0MA=="))
 #_(tap> (-> (build-post-page-hiccup "cG9zdDo0MA==")
@@ -331,12 +346,16 @@
 #_(tap> (for [category (get-saved-categories)]
           (build-category-page-hiccup category)))
 #_(tap> (-> (build-category-page-hiccup {:name "Fiction"})))
-#_(->> (get-saved-post-metas)
-      first
-      :published-date
-      (t/format "MMM d, yyy"))
-#_()
+#_(tap> (->> (get-saved-post-metas)
+             first
+             :published-date
+             (t/format "MMM d, yyy")))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; copy assets
+#_(fs/copy-dir-into assets-path public-path)
 
 ;; download wordpress data
 #_(dl-post-metas!)
@@ -352,14 +371,17 @@
 #_(doseq [id (get-saved-page-meta-ids)]
     (dl-page-content! id))
 
+;; build stylesheet
+#_(styles/spit-styles (str public-path "/" styles-filename))
+
 ;; build index page
-#_(spit "public/index.html"
+#_(spit (str public-path "/index.html")
         (-> (build-index-page-hiccup)
             hiccup/html))
 
 ;; build category pages
 #_(doseq [{:keys [uri] :as category} (get-saved-categories)]
-    (let [path (str "public" uri)]
+    (let [path (str public-path uri)]
       (fs/mkdirs path)
       (spit (str path "index.html")
             (-> (build-category-page-hiccup category)
@@ -367,7 +389,7 @@
 
 ;; build post pages
 #_(doseq [{:keys [uri post/id]} (get-saved-post-metas)]
-    (let [path (str "public" uri)]
+    (let [path (str public-path uri)]
       (fs/mkdirs path)
       (spit (str path "index.html")
             (-> (build-post-page-hiccup id)
@@ -375,7 +397,7 @@
 
 ;; build page pages
 #_(doseq [{:keys [uri page/id]} (get-saved-page-metas)]
-    (let [path (str "public" uri)]
+    (let [path (str public-path uri)]
       (fs/mkdirs path)
       (spit (str path "index.html")
             (-> (build-page-page-hiccup id)

@@ -13,6 +13,10 @@
    [tick.alpha.api :as t]
    [time-literals.read-write]))
 
+
+(defn tp [x] (tap> x) x)
+
+
 (defn read-edn
   [filename]
   (edn/read-string
@@ -102,6 +106,15 @@
 (defn post-meta-path-by-id
   [id]
   (str post-meta-path "/" id ".edn"))
+
+
+(def post-excerpt-path
+  (str data-path "/wp-post-excerpt"))
+
+
+(defn post-excerpt-path-by-id
+  [id]
+  (str post-excerpt-path "/" id ".edn"))
 
 
 (def page-content-path
@@ -237,6 +250,11 @@
   (read-edn (post-meta-path-by-id id)))
 
 
+(defn get-saved-post-excerpt-by-id
+  [id]
+  (read-edn (post-excerpt-path-by-id id)))
+
+
 (defn get-saved-page-meta-by-id
   [id]
   (read-edn (page-meta-path-by-id id)))
@@ -280,6 +298,18 @@
        (-> (page-content-path-by-id id)
            slurp
            (hickory/parse-fragment))))
+
+
+(defn p-form-content
+  [form]
+  (let [[k _ content] form]
+    (when (= k :p)
+      content)))
+
+
+(defn make-post-excerpt
+  [id]
+  (some p-form-content (build-post-content-hiccup id)))
 
 
 (defn build-page-hiccup
@@ -366,6 +396,17 @@
 ;; download wordpress post content
 #_(doseq [id (get-saved-post-meta-ids)]
     (dl-post-content! id))
+
+;; build post excerpts
+#_(fs/mkdirs post-excerpt-path)
+#_(doseq [id (get-saved-post-meta-ids)]
+    (spit (post-excerpt-path-by-id id)
+          {:excerpt (make-post-excerpt id)}))
+
+;; merge excerpts into post metas
+#_(doseq [{:keys [post/id] :as meta} (tp (get-saved-post-metas))]
+    (spit (post-meta-path-by-id id)
+          (merge meta (get-saved-post-excerpt-by-id id))))
 
 ;; download wordpress page content
 #_(doseq [id (get-saved-page-meta-ids)]

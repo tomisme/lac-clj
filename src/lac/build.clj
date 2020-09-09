@@ -323,7 +323,7 @@
     [:body
      [:div.wrapper
       (el/header-el {:menubar-items (get-saved-main-menu)
-                     :header-img-url "https://lightsandclockwork.xyz/static/header-6de1aeeca65f723a4779953f735d7b4d.svg"})
+                     :header-img-url "/header.svg"})
       (el/main-el main)
       (el/footer-el)]]))
 

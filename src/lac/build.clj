@@ -29,7 +29,7 @@
 
 
 (def all-posts-query
-  "{posts{edges{node{id,modified,modifiedGmt,title,status,slug,uri,date,author{node{name}},categories{nodes{name,uri}}}}}}")
+  "{posts{edges{node{details{excerpt,previewImage{sourceUrl}},id,modified,modifiedGmt,title,status,slug,uri,date,author{node{name}},categories{nodes{name,uri}}}}}}")
 
 
 (def all-pages-query
@@ -138,6 +138,8 @@
 (defn post-res->post-meta
   [{:keys [node]}]
   {:post/id (:id node)
+   :excerpt (-> node :details :excerpt)
+   :preview-image-url (-> node :details :previewImage :sourceUrl)
    :author (-> node :author :node)
    :categories (-> node :categories :nodes)
    :published-date (t/parse (:date node))
@@ -329,7 +331,7 @@
 (defn build-post-page-hiccup
   [id]
   (build-page-hiccup
-   {:main (el/basic-main-el
+   {:main (el/post-main-el
             (get-saved-post-meta-by-id id)
             (build-post-content-hiccup id))}))
 
@@ -337,7 +339,7 @@
 (defn build-page-page-hiccup
   [id]
   (build-page-hiccup
-   {:main (el/basic-main-el
+   {:main (el/page-main-el
            (get-saved-page-meta-by-id id)
            (build-page-content-hiccup id))}))
 
@@ -398,10 +400,11 @@
     (dl-post-content! id))
 
 ;; build post excerpts
-#_(fs/mkdirs post-excerpt-path)
-#_(doseq [id (get-saved-post-meta-ids)]
-    (spit (post-excerpt-path-by-id id)
-          {:excerpt (make-post-excerpt id)}))
+;; TODO only overwrite posts with no excerpts
+; #_(fs/mkdirs post-excerpt-path)
+; #_(doseq [id (get-saved-post-meta-ids)]
+;     (spit (post-excerpt-path-by-id id)
+;           {:excerpt (make-post-excerpt id)}))
 
 ;; merge excerpts into post metas
 #_(doseq [{:keys [post/id] :as meta} (tp (get-saved-post-metas))]

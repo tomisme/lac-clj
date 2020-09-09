@@ -19,7 +19,6 @@
      "❤"]]])
 
 
-
 (defn main-el
   [& children]
   (into [:main] children))
@@ -58,8 +57,7 @@
      [:a {:href (:uri category)}
       (:name category)]
      " by "
-     [:a {:href nil}
-      (:name author)]
+     (:name author)
      " on "
      (t/format "MMM d, yyy" published-date)]))
 
@@ -69,12 +67,15 @@
   (if (empty? posts)
     [:div "Nothing here yet!"]
     (into [:ul.post-list]
-          (for [{:keys [title excerpt uri] :as post} posts]
+          (for [{:keys [title excerpt uri preview-image-url] :as post} posts]
             [:li
              [:a {:href uri}
-              [:h3 title]]
+              [:h2 title]]
              (posted-by-el post)
-             [:p excerpt]]))))
+             [:div.split
+              [:p excerpt]
+              (when preview-image-url
+                [:img {:src preview-image-url}])]]))))
 
 
 (defn index-page-main-el
@@ -93,7 +94,16 @@
    [:p description]])
 
 
-(defn basic-main-el
+(defn post-main-el
+  [{:keys [title] :as meta} content]
+  [:div
+   [:h1 title]
+   (posted-by-el meta)
+   [:div.post-content
+    content]])
+
+
+(defn page-main-el
   [{:keys [title]} content]
   [:div
    [:h1 title]

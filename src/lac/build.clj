@@ -362,6 +362,20 @@
               :children (map get-saved-category-details-by-name
                              (map :name children))})})))
 
+
+;; build post excerpts
+;; TODO only overwrite posts with no excerpts
+; #_(fs/mkdirs post-excerpt-path)
+; #_(doseq [id (get-saved-post-meta-ids)]
+;     (spit (post-excerpt-path-by-id id)
+;           {:excerpt (make-post-excerpt id)}))
+
+;; merge excerpts into post metas
+; #_(doseq [{:keys [post/id] :as meta} (tp (get-saved-post-metas))]
+;     (spit (post-meta-path-by-id id)
+;           (merge meta (get-saved-post-excerpt-by-id id))))
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
@@ -398,18 +412,6 @@
 ;; download wordpress post content
 #_(doseq [id (get-saved-post-meta-ids)]
     (dl-post-content! id))
-
-;; build post excerpts
-;; TODO only overwrite posts with no excerpts
-; #_(fs/mkdirs post-excerpt-path)
-; #_(doseq [id (get-saved-post-meta-ids)]
-;     (spit (post-excerpt-path-by-id id)
-;           {:excerpt (make-post-excerpt id)}))
-
-;; merge excerpts into post metas
-#_(doseq [{:keys [post/id] :as meta} (tp (get-saved-post-metas))]
-    (spit (post-meta-path-by-id id)
-          (merge meta (get-saved-post-excerpt-by-id id))))
 
 ;; download wordpress page content
 #_(doseq [id (get-saved-page-meta-ids)]

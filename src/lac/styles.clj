@@ -9,6 +9,12 @@
 
 (def stylesheet
   [
+   [:div.wp-block-docxpresso-cut-paste-plugin {:display "flex"
+                                               :justify-content "space-around"}
+    [:section {:width "36rem"}]
+    [:p {:margin "0.6rem 0 !important"}]
+    [:span {:font-size "1.1rem !important"
+            :line-height "1.5rem"}]]
    [:div.wprm-recipe {:border "1px solid #e0e0e0"
                       :margin-top "2rem"
                       :padding "1rem"}
